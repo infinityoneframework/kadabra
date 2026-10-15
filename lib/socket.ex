@@ -1,7 +1,7 @@
 defmodule Kadabra.Socket do
   @moduledoc false
 
-  defstruct socket: nil, buffer: "", active_user: nil
+  defstruct socket: nil, transport: :gen_tcp, buffer: "", active_user: nil
 
   alias Kadabra.FrameParser
 
@@ -9,7 +9,7 @@ defmodule Kadabra.Socket do
 
   use GenServer
 
-  @type ssl_sock :: {:sslsocket, any, pid | {any, any}}
+  @type ssl_sock :: :ssl.sslsocket()
 
   @type connection_result ::
           {:ok, ssl_sock}
@@ -35,8 +35,9 @@ defmodule Kadabra.Socket do
   def init({uri, opts}) do
     case connect(uri, opts) do
       {:ok, socket} ->
-        socket_send(socket, connection_preface())
-        {:ok, %__MODULE__{socket: socket}}
+        transport = if uri.scheme == "https", do: :ssl, else: :gen_tcp
+        socket_send(socket, connection_preface(), transport)
+        {:ok, %__MODULE__{socket: socket, transport: transport}}
 
       error ->
         error
@@ -78,29 +79,35 @@ defmodule Kadabra.Socket do
 
   @spec options(Keyword.t(), :http | :https) :: [...]
   defp options(opts, :https) do
-    opts ++
-      [
-        {:active, :once},
-        {:packet, :raw},
-        {:reuseaddr, false},
-        {:verify, :verify_peer},
-        {:depth, 99},
-        {:cacerts, :certifi.cacerts()},
-        {:customize_hostname_check,
-         [{:match_fun, :public_key.pkix_verify_hostname_match_fun(:https)}]},
-        {:alpn_advertised_protocols, [<<"h2">>]},
-        :binary
-      ]
+    defaults = [
+      {:active, :once},
+      {:packet, :raw},
+      {:reuseaddr, false},
+      {:verify, :verify_peer},
+      {:depth, 99},
+      {:cacerts, :certifi.cacerts()},
+      {:alpn_advertised_protocols, [<<"h2">>]},
+      :binary
+    ]
+
+    Enum.reject(defaults, fn
+      {key, _} -> List.keymember?(opts, key, 0)
+      _ -> false
+    end) ++ opts
   end
 
   defp options(opts, :http) do
-    opts ++
-      [
-        {:active, :once},
-        {:packet, :raw},
-        {:reuseaddr, false},
-        :binary
-      ]
+    defaults = [
+      {:active, :once},
+      {:packet, :raw},
+      {:reuseaddr, false},
+      :binary
+    ]
+
+    Enum.reject(defaults, fn
+      {key, _} -> List.keymember?(opts, key, 0)
+      _ -> false
+    end) ++ opts
   end
 
   # Frame recv and parsing
@@ -110,7 +117,7 @@ defmodule Kadabra.Socket do
 
     case parse_bin(socket, bin, state) do
       {:unfinished, bin, state} ->
-        setopts(state.socket, [{:active, :once}])
+        setopts(state.socket, [{:active, :once}], state.transport)
         {:noreply, %{state | buffer: bin}}
     end
   end
@@ -132,22 +139,10 @@ defmodule Kadabra.Socket do
 
   # Internal socket helpers
 
-  defp socket_send({:sslsocket, _, _} = pid, bin) do
-    # IO.puts("Sending #{byte_size(bin)} bytes")
-    :ssl.send(pid, bin)
-  end
+  defp socket_send(socket, bin, transport), do: transport.send(socket, bin)
 
-  defp socket_send(pid, bin) do
-    :gen_tcp.send(pid, bin)
-  end
-
-  defp setopts({:sslsocket, _, _} = pid, opts) do
-    :ssl.setopts(pid, opts)
-  end
-
-  defp setopts(pid, opts) do
-    :inet.setopts(pid, opts)
-  end
+  defp setopts(socket, opts, :ssl), do: :ssl.setopts(socket, opts)
+  defp setopts(socket, opts, :gen_tcp), do: :inet.setopts(socket, opts)
 
   # handle_call
 
@@ -161,19 +156,19 @@ defmodule Kadabra.Socket do
   end
 
   def handle_call({:send, bin}, _from, state) when is_binary(bin) do
-    resp = socket_send(state.socket, bin)
+    resp = socket_send(state.socket, bin, state.transport)
     {:reply, resp, state}
   end
 
   def handle_call({:send, bins}, _from, state) when is_list(bins) do
-    for bin <- bins, do: socket_send(state.socket, bin)
+    for bin <- bins, do: socket_send(state.socket, bin, state.transport)
     {:reply, :ok, state}
   end
 
   # handle_info
 
   def handle_info(:send_preface, state) do
-    socket_send(state.socket, connection_preface())
+    socket_send(state.socket, connection_preface(), state.transport)
     {:noreply, state}
   end
 

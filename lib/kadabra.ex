@@ -5,7 +5,7 @@ defmodule Kadabra do
   Written to manage HTTP/2 connections for
   [pigeon](https://github.com/codedge-llc/pigeon).
 
-  *Requires Elixir 1.4/OTP 19.2 or later.*
+  *Requires Elixir 1.20 or later.*
 
   ## Usage
 

@@ -2,7 +2,7 @@ defmodule Kadabra.ConnectionTest do
   use ExUnit.Case
 
   test "closes active streams on socket close" do
-    uri = 'https://http2.golang.org'
+    uri = Kadabra.TestServer.start()
     {:ok, pid} = Kadabra.open(uri)
 
     ref = Process.monitor(pid)
@@ -15,7 +15,7 @@ defmodule Kadabra.ConnectionTest do
     socket_pid = :sys.get_state(conn_pid).config.socket
 
     # Wait to collect some data on the streams
-    Process.sleep(500)
+    :sys.get_state(conn_pid)
 
     state = :sys.get_state(conn_pid)
     assert Enum.count(state.flow_control.stream_set.active_streams) == 2

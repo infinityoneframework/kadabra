@@ -1,38 +1,32 @@
 defmodule KadabraTest do
   use ExUnit.Case, async: true
-  doctest Kadabra
 
   @moduletag report: [:pid]
 
   alias Kadabra.Stream
 
-  @golang_uri "https://http2.golang.org"
-
   setup do
-    pid =
-      @golang_uri
-      |> Kadabra.open()
-      |> elem(1)
+    uri = Kadabra.TestServer.start()
+    {:ok, pid} = Kadabra.open(uri)
 
-    [conn: pid]
+    [conn: pid, uri: uri]
   end
 
   describe "open/2" do
-    @tag :golang
-    test "sets port if specified", _context do
-      opts = [port: 443]
-      {:ok, pid} = Kadabra.open(@golang_uri, opts)
+    test "sets port if specified", context do
+      port = URI.parse(context.uri).port
+      opts = [port: port]
+      {:ok, pid} = Kadabra.open(context.uri, opts)
 
       conn_pid = :sys.get_state(pid).connection
       conn = :sys.get_state(conn_pid)
 
-      assert conn.config.opts[:port] == 443
+      assert conn.config.opts[:port] == port
       Kadabra.close(pid)
     end
   end
 
   describe "request/2" do
-    @tag :golang
     test "can take a list of requests", context do
       headers = [
         {":method", "GET"},
@@ -48,7 +42,6 @@ defmodule KadabraTest do
       end
     end
 
-    @tag :golang
     test "can take a single request", context do
       headers = [
         {":method", "GET"},
@@ -74,8 +67,25 @@ defmodule KadabraTest do
     end
   end
 
+  test "ping receives a pong from the local peer", %{conn: conn} do
+    connection = :sys.get_state(conn).connection
+    Kadabra.ping(conn)
+    assert_receive {:pong, ^connection}, 5_000
+  end
+
+  test "HEAD, POST, and DELETE requests complete", %{conn: conn} do
+    for {method, id} <- [head: 1, post: 3, delete: 5] do
+      assert :ok = apply(Kadabra, method, [conn, "/"])
+
+      assert_receive {:end_stream,
+                      %Stream.Response{id: ^id, status: 200} = response},
+                     5_000
+
+      if method == :head, do: assert(response.body == "")
+    end
+  end
+
   describe "GET" do
-    @tag :golang
     test "can take an options keyword list", context do
       headers = [
         {":method", "GET"},
@@ -87,7 +97,6 @@ defmodule KadabraTest do
       assert_receive {:end_stream, %Stream.Response{id: 1}}, 5_000
     end
 
-    @tag :golang
     test "https://http2.golang.org/reqinfo", context do
       Kadabra.get(context[:conn], "/reqinfo")
 
@@ -101,7 +110,6 @@ defmodule KadabraTest do
       end
     end
 
-    @tag :golang
     test "https://http2.golang.org/reqinfo a lot", context do
       count = 5_000
 
@@ -117,7 +125,6 @@ defmodule KadabraTest do
       end
     end
 
-    @tag :golang
     test "https://http2.golang.org/redirect", context do
       Kadabra.get(context[:conn], "/redirect")
 
@@ -135,7 +142,6 @@ defmodule KadabraTest do
       end
     end
 
-    @tag :golang
     test "https://http2.golang.org/file/gopher.png", context do
       Kadabra.get(context[:conn], "/file/gopher.png")
 
@@ -150,7 +156,6 @@ defmodule KadabraTest do
       end
     end
 
-    @tag :golang
     test "https://http2.golang.org/file/go.src.tar.gz", context do
       Kadabra.get(context[:conn], "/file/go.src.tar.gz")
 
@@ -168,7 +173,6 @@ defmodule KadabraTest do
       end
     end
 
-    @tag :golang
     test "https://http2.golang.org/serverpush", context do
       Kadabra.get(context[:conn], "/serverpush")
 
@@ -185,7 +189,6 @@ defmodule KadabraTest do
   end
 
   describe "PUT" do
-    @tag :golang
     test "https://http2.golong.org/ECHO", context do
       payload = String.duplicate("test", 10)
       Kadabra.put(context[:conn], "/ECHO", body: payload)
@@ -203,7 +206,6 @@ defmodule KadabraTest do
       end
     end
 
-    @tag :golang
     test "https://http2.golong.org/ECHO with large payload", context do
       payload = String.duplicate("test", 1_000_000)
       Kadabra.put(context[:conn], "/ECHO", body: payload)
@@ -221,7 +223,6 @@ defmodule KadabraTest do
       end
     end
 
-    @tag :golang
     test "https://http2.golong.org/crc32", context do
       payload = "test"
       Kadabra.put(context[:conn], "/crc32", body: payload)
@@ -240,9 +241,9 @@ defmodule KadabraTest do
     end
   end
 
-  test "socket close message closes connection", _context do
+  test "socket close message closes connection", %{uri: uri} do
     pid =
-      @golang_uri
+      uri
       |> Kadabra.open()
       |> elem(1)
 

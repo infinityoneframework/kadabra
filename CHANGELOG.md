@@ -40,7 +40,7 @@
 ## v0.4.2
 
 - Fixed `{:closed, pid}` task race condition during connection cleanup.
-- Everything is supervised under `Kadabra.Application` again, instead of
+- Everything is supervised under Kadabra.Application again, instead of
   handling supervision yourself.
 
 ## v0.4.1
@@ -58,7 +58,7 @@
 - Support for `http` URIs.
 - Requests are now buffered with GenStage.
 - Added `Kadabra.head/2` and `Kadabra.delete/2`.
-- `Kadabra.open/3` replaced with `Kadabra.open/2`.
+- Kadabra.open/3 replaced with `Kadabra.open/2`.
   - Scheme, host and port are now automatically parsed from the URI string.
     See the README for examples.
   - Socket options passed as `:tcp`/`:ssl`, respectively.
@@ -115,5 +115,5 @@
 
 ## v0.2.1
 
-- Fixed: calling `Kadabra.open/3` with `reconnect: false` to disable
+- Fixed: calling Kadabra.open/3 with `reconnect: false` to disable
   automatic reconnect on socket close.

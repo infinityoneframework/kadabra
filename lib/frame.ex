@@ -36,7 +36,7 @@ defmodule Kadabra.Frame do
 
   defp parse_payload(size, bin) do
     case bin do
-      <<frame_payload::size(size), rest::bitstring>> ->
+      <<frame_payload::size(^size), rest::bitstring>> ->
         {:ok, <<frame_payload::size(size)>>, <<rest::bitstring>>}
 
       bin ->
