@@ -86,26 +86,41 @@ defmodule Kadabra.Stream do
     {:stop, :normal, [{:reply, from, :ok}]}
   end
 
-  def recv(from, %Data{end_stream: true, data: data}, state, stream)
+  def recv(from, %Data{end_stream: true, data: data}, state, %Stream{} = stream)
       when state in [@hc_local] do
     :gen_statem.reply(from, :ok)
     stream = %Stream{stream | body: stream.body <> data}
     {:next_state, @closed, stream}
   end
 
-  def recv(from, %Data{end_stream: true, data: data}, _state, stream) do
+  def recv(
+        from,
+        %Data{end_stream: true, data: data},
+        _state,
+        %Stream{} = stream
+      ) do
     :gen_statem.reply(from, :ok)
     stream = %Stream{stream | body: stream.body <> data}
     {:next_state, @hc_remote, stream}
   end
 
-  def recv(from, %Data{end_stream: false, data: data}, _state, stream) do
+  def recv(
+        from,
+        %Data{end_stream: false, data: data},
+        _state,
+        %Stream{} = stream
+      ) do
     :gen_statem.reply(from, :ok)
     stream = %Stream{stream | body: stream.body <> data}
     {:keep_state, stream}
   end
 
-  def recv(from, %Headers{end_stream: end_stream?} = frame, _state, stream) do
+  def recv(
+        from,
+        %Headers{end_stream: end_stream?} = frame,
+        _state,
+        %Stream{} = stream
+      ) do
     case Hpack.decode(stream.decoder, frame.header_block_fragment) do
       {:ok, headers} ->
         :gen_statem.reply(from, :ok)
@@ -122,13 +137,13 @@ defmodule Kadabra.Stream do
     end
   end
 
-  def recv(from, %RstStream{} = _frame, state, stream)
+  def recv(from, %RstStream{} = _frame, state, %Stream{} = stream)
       when state in [@open, @hc_local, @hc_remote, @closed] do
     # IO.inspect(frame, label: "Got RST_STREAM")
     {:next_state, :closed, stream, [{:reply, from, :ok}]}
   end
 
-  def recv(from, %PushPromise{} = frame, state, stream)
+  def recv(from, %PushPromise{} = frame, state, %Stream{} = stream)
       when state in [@idle] do
     {:ok, headers} = Hpack.decode(stream.decoder, frame.header_block_fragment)
 
@@ -141,7 +156,12 @@ defmodule Kadabra.Stream do
     {:next_state, @reserved_remote, stream}
   end
 
-  def recv(from, %WindowUpdate{window_size_increment: inc}, _state, stream) do
+  def recv(
+        from,
+        %WindowUpdate{window_size_increment: inc},
+        _state,
+        %Stream{} = stream
+      ) do
     :gen_statem.reply(from, :ok)
 
     flow =
@@ -153,7 +173,7 @@ defmodule Kadabra.Stream do
     {:keep_state, %{stream | flow: flow}}
   end
 
-  def recv(from, %Continuation{} = frame, _state, stream) do
+  def recv(from, %Continuation{} = frame, _state, %Stream{} = stream) do
     {:ok, headers} = Hpack.decode(stream.decoder, frame.header_block_fragment)
 
     :gen_statem.reply(from, :ok)
@@ -162,7 +182,7 @@ defmodule Kadabra.Stream do
     {:keep_state, stream}
   end
 
-  def recv(frame, state, stream) do
+  def recv(frame, state, %Stream{} = stream) do
     """
     Unknown RECV on stream #{stream.id}
     Frame: #{inspect(frame)}

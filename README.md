@@ -11,7 +11,14 @@ Written to manage HTTP/2 connections for [pigeon](https://github.com/codedge-llc
 
 ## Installation
 
-_Requires Elixir 1.6/OTP 19.2 or later._
+_Requires Elixir 1.20 or later. The development toolchain is pinned in `.tool-versions`._
+
+## Testing
+
+Run `mix test` from this checkout. Integration tests use a local HTTP/2 peer,
+including TLS certificates generated for each TLS test, and require no public
+HTTP service. The network examples in the API documentation are illustrative;
+their behavior is covered by the local integration tests.
 
 Add kadabra to your `mix.exs`:
 

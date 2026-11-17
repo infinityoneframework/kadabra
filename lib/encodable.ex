@@ -139,7 +139,9 @@ defimpl Kadabra.Encodable, for: Kadabra.Connection.Settings do
   end
 
   def to_encoded_list(settings) do
-    Enum.reduce(settings, [], fn {k, v}, acc ->
+    settings
+    |> Enum.sort_by(&elem(&1, 0))
+    |> Enum.reduce([], fn {k, v}, acc ->
       case v do
         nil -> acc
         :infinite -> acc

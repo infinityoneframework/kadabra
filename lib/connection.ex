@@ -11,7 +11,6 @@ defmodule Kadabra.Connection do
             queue: nil
 
   use GenServer
-  require Logger
 
   import Kernel, except: [send: 2]
 
@@ -32,7 +31,7 @@ defmodule Kadabra.Connection do
           queue: pid
         }
 
-  @type sock :: {:sslsocket, any, pid | {any, any}}
+  @type sock :: :ssl.sslsocket()
 
   def start_link(%Config{} = config) do
     GenServer.start_link(__MODULE__, config)
